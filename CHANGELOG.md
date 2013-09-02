@@ -1,3 +1,244 @@
+#3.1.82.192
++ Temp fix for shuffle bug - Kelly
+
+#3.1.81.192 - Test
++ Temp fix for shuffle bug - Kelly
+
+#3.1.81.191
++ Fixed problem with two sided table not propagating properly - Kelly
+
+#3.1.80.191 - Test
++ Fixed problem with two sided table not propagating properly - Kelly
+
+#3.1.80.190
++ Fixed missing two sided table option - Kelly
++ Fix playing mp3 sounds freezing client - Kelly
+
+#3.1.79.190 - Test
++ Fixed missing two sided table option - Kelly
++ Fix playing mp3 sounds freezing client - Kelly
+
+#3.1.79.189
++ Fixed ? cards when a player leaves - Kelly
++ Don't have to pick two sided table anymore - Kelly
++ Make installer install as a user instead of admin - Kelly
++ Disabled silent installer for now - Kelly
++ Fixed UAC Disabled or run as administrator auto close - Kelly
+
+#3.1.78.189 - Test
++ Fixed ? cards when a player leaves - Kelly
++ Don't have to pick two sided table anymore - Kelly
++ Make installer install as a user instead of admin - Kelly
++ Disabled silent installer for now - Kelly
++ Fixed UAC Disabled or run as administrator auto close - Kelly
+
+#3.1.78.188
++ Fixed ? cards when a player leaves - Kelly
++ Don't have to pick two sided table anymore - Kelly
++ Make installer install as a user instead of admin - Kelly
++ Disabled silent installer for now - Kelly
+
+#3.1.77.188 - Test
++ Fixed ? cards when a player leaves - Kelly
++ Don't have to pick two sided table anymore - Kelly
++ Make installer install as a user instead of admin - Kelly
++ Disabled silent installer for now - Kelly
+
+#3.1.77.187
++ Removed mp3 support until bug is fixed, or error can be caught - Kelly
+
+#3.1.76.187 - Test
++ Removed mp3 support until bug is fixed, or error can be caught - Kelly
+
+#3.1.76.186
+
+#3.1.75.186 - Test
+
+#3.1.75.185
++ Added some event logging - Kelly
++ Added option to disable game sounds - Kelly
+
+#3.1.74.185 - Test
++ Added some event logging - Kelly
++ Added option to disable game sounds - Kelly
+
+#3.1.74.184
++ Add spell checking to the chat - Kelly
++ Add auto complete to the chat - Kelly
++ Made autoscroll much better - Kelly
+
+#3.1.73.184 - Test
++ Add spell checking to the chat - Kelly
++ Add auto complete to the chat - Kelly
++ Made autoscroll much better - Kelly
+
+#3.1.73.183
+
+#3.1.72.183 - Test
+
+#3.1.72.182
++ Fixed some sub users getting sub messages - Kelly
+
+#3.1.71.182 - Test
++ Fixed some sub users getting sub messages - Kelly
+
+#3.1.71.181
++ Added the ability to hide errors in game - Kelly
+
+#3.1.70.181 - Test
++ Added the ability to hide errors in game - Kelly
+
+#3.1.70.180
++ Made -t command load faster - Kelly
++ Fixed watch list not populating because of date formatting issue - Gemini
++ Fixed attaching multiple game events to one event handler https://github.com/kellyelton/OCTGN/issues/981 - Kelly
++ Fix OnChangeCounter old value bug https://github.com/kellyelton/OCTGN/issues/983 - Kelly
++ MoveTo now tracks if it was induced by script or not https://github.com/kellyelton/OCTGN/issues/984 - Kelly
+
+#3.1.69.180 - Test
++ Made -t command load faster - Kelly
++ Fixed watch list not populating because of date formatting issue - Gemini
++ Fixed attaching multiple game events to one event handler https://github.com/kellyelton/OCTGN/issues/981 - Kelly
++ Fix OnChangeCounter old value bug https://github.com/kellyelton/OCTGN/issues/983 - Kelly
++ MoveTo now tracks if it was induced by script or not https://github.com/kellyelton/OCTGN/issues/984 - Kelly
+
+#3.1.69.179
++ Allow game board image to be changed by calling table.setBoardImage(path) https://github.com/kellyelton/OCTGN/issues/540 - Kelly
++ Added OnPlayerGlobalVariableChanged and OnGlobalVariableChanged events - Kelly
+
+#3.1.68.179 - Test
++ Allow game board image to be changed by calling table.setBoardImage(path) https://github.com/kellyelton/OCTGN/issues/540 - Kelly
++ Added OnPlayerGlobalVariableChanged and OnGlobalVariableChanged events - Kelly
+
+#3.1.68.178
+
+#3.1.67.178 - Test
+
+#3.1.67.177
++ Add BGG GenCon Live Coverage Stream - Kelly
+
+#3.1.66.177 - Test
++ Add BGG GenCon Live Coverage Stream - Kelly
+
+#3.1.66.176
++ Fixed subscription issue - Kelly
+
+#3.1.65.176 - Test
++ Fixed subscription issue - Kelly
+
+#3.1.65.175
+
+#3.1.64.175 - Test
+
+#3.1.64.174
++ Updated some release automation tasks - Kelly
++ Made game sounds async - Kelly
++ Add mp3 support for sound playback - Kelly
++ New windows created load in the same monitor as OCTGN #977 - Kelly
+
+#3.1.63.174 - Test
++ Updated some release automation tasks - Kelly
++ Made game sounds async - Kelly
++ Add mp3 support for sound playback - Kelly
++ New windows created load in the same monitor as OCTGN #977 - Kelly
+
+#3.1.63.173 - Test
++ Updated some release automation tasks - Kelly
++ Made game sounds async - Kelly
++ Add mp3 support for sound playback - Kelly
++ New windows created load in the same monitor as OCTGN #977 - Kelly
+
+#3.1.58.168 - Test
++ Add Instant Search to Deck Editor, Addresses https://github.com/kellyelton/OCTGN/issues/458 - Soul1355
+
+#3.1.56.165 - Test
++ changes fallback behavior of cards in piles, addresses https://github.com/kellyelton/OCTGN/issues/937 - Soul1355
++ Add the ability to save/load searches in the deck editor https://github.com/kellyelton/OCTGN/issues/961 - Kelly
+
+#3.1.56.164
++ 10% Feature Funding goals complete
+
+#3.1.56.164 - Test
++ Fixed issues with some games starting due to waiting for global - Kelly
++ Fixed chat undocking not sizing - Kelly
++ Fixing missing chat messages - Kelly
+
+#3.1.55.163 - Test
++ Fixed a UI issue
+
+#3.1.55.162 - Test
++ Add custom chat font sizes - Kelly
+
+#3.1.55.160 - Test
++ When starting a game, wait for all players to be ready before allowing any actions - Kelly
++ Add option to use window or tab for chats. You can also dock/undock a chat from OCTGN - Kelly
+
+#3.1.55.158 - Test
++ Messagebox added to be shown on SSL validation errors giving the option to disable SSL cert validation from there. - Gravecorp
++ Fixed limited game card duplication bug. https://github.com/kellyelton/OCTGN/issues/864 - Gravecorp
++ Hard coded some paths for images etc to make things faster - Kelly
++ Fixed a login bug using custom data directory - Kelly
++ Made settings store actual types instead of just strings - Kelly
++ Added game settings for game developers https://github.com/kellyelton/OCTGN/issues/647 - Kelly
++ Fixed some things being transparent that shouldn't be(like menu's etc) - Kelly
++ Removed all menu shortcuts from game window - Kelly
++ Added chat auto reconnect - Kelly
++ Modified some feature funding icons - Kelly
++ Added some getting started helpful automations + Spoils Plug - Kelly
+
+#3.1.55.157 - Test
++ Added option in the menu to ignore SSL certificate validity. Should fix the rare cases where SSL traffic certs are not properly validated. - Gravecorp
++ Changes made to the limited play dialog. It will no longer show sets in the list that have no boosters in them. - Gravecorp
++ Finally fixed the booster box not selecting the first in the list on changing the set. - Gravecorp
++ Limited play no longer shows in the menu for games which have no boosters defined in any of the sets. - Gravecorp
++ AskMarker dialog now sorts by marker name and no longer by GUID. - Gravecorp
++ fix for: https://github.com/kellyelton/OCTGN/issues/897 -Gravecorp
+
+#3.1.55.156
+#3.1.54.156 - Test
++ Fixed some excessive data usage
+
+#3.1.54.155 - Test
++ Can view alternate images to cards in the deck editor https://github.com/kellyelton/OCTGN/issues/898 - Kelly
+
+#3.1.54.154
+#3.1.53.153 - Test
++ Fixed a login problem - Kelly
++ Changed marker dialog button - Davitz
+
+#3.1.53.152 - Test
++ Fixed a proxygen issue(developers) https://github.com/kellyelton/OCTGN/issues/928 - Gravecorp
+
+#3.1.53.151
+#3.1.52.151 - Test
++ Fixed player tab text color https://github.com/kellyelton/OCTGN/issues/918 - Kelly
++ Fixed /table command https://github.com/kellyelton/OCTGN/issues/901 - Kelly
++ Removed full game log - Kelly
+
+#3.1.52.150 - Test
++ Fixed some login issues - Kelly
+
+#3.1.52.149 - Test
++ Sort games by game name - iGemini
++ Deck tries to resolve missing guids when loading a deck - Gravecorp
++ Update options dialog box - KlKitchens
++ Replaced installed game checkbox with a button for visibitily - KlKitchens
++ Added logging of loaded assembly paths - Kelly
+
+#3.1.52.148
+#3.1.51.148 - Test
++ Updated feature funding window - Kelly
+
+#3.1.51.147
+#3.1.50.147 - Test
++ Fix for myget change to https - klkitchens
++ Fix windows not having custom backgrounds - Kelly
++ Add message if not subscribed when adding an icon - Kelly
+
+#3.1.50.146 - Test
++ Improve image(o8c) import process - klkitchens
++ Fixed https://github.com/kellyelton/OCTGN/issues/909 - Brine
+
 #3.1.49.144
 #3.1.48.144 - Test
 + Migrate card images to new location on start - Kelly

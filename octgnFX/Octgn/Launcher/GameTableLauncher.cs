@@ -46,9 +46,9 @@
 
         private void Host()
         {
-            StartLocalGame(HostGame, Skylabs.Lobby.Randomness.RandomRoomName(), null);
+            StartLocalGame(HostGame, Skylabs.Lobby.Randomness.RandomRoomName(), "");
             Octgn.Play.Player.OnLocalPlayerWelcomed += PlayerOnOnLocalPlayerWelcomed;
-            Program.GameSettings.UseTwoSidedTable = Prefs.TwoSidedTable;
+            Program.GameSettings.UseTwoSidedTable = HostGame.UseTwoSidedTable;
             if (Program.GameEngine != null)
                 Dispatcher.CurrentDispatcher.Invoke(new Action(Program.GameEngine.Begin));
         }
@@ -82,7 +82,7 @@
                 throw new UserMessageException("Cannot start local game. You may be missing a file.");
             }
             Program.LobbyClient.CurrentHostedGamePort = HostPort;
-            Program.GameSettings.UseTwoSidedTable = true;
+            Program.GameSettings.UseTwoSidedTable = HostGame.UseTwoSidedTable;
             Program.IsHost = true;
             Program.GameEngine = new GameEngine(game, Prefs.Nickname, password,true);
 

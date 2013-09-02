@@ -209,7 +209,8 @@ namespace Octgn.Server
 					int arg1 = reader.ReadInt32();
 					int arg2 = reader.ReadInt32();
 					bool arg3 = reader.ReadBoolean();
-					handler.MoveCardReq(arg0, arg1, arg2, arg3);
+					bool arg4 = reader.ReadBoolean();
+					handler.MoveCardReq(arg0, arg1, arg2, arg3, arg4);
 					break;
 				}
 				case 34:
@@ -219,7 +220,8 @@ namespace Octgn.Server
 					int arg2 = reader.ReadInt32();
 					int arg3 = reader.ReadInt32();
 					bool arg4 = reader.ReadBoolean();
-					handler.MoveCardAtReq(arg0, arg1, arg2, arg3, arg4);
+					bool arg5 = reader.ReadBoolean();
+					handler.MoveCardAtReq(arg0, arg1, arg2, arg3, arg4, arg5);
 					break;
 				}
 				case 36:
@@ -500,6 +502,12 @@ namespace Octgn.Server
 					byte arg0 = reader.ReadByte();
 					string arg1 = reader.ReadString();
 					handler.PlaySound(arg0, arg1);
+					break;
+				}
+				case 94:
+				{
+					byte arg0 = reader.ReadByte();
+					handler.Ready(arg0);
 					break;
 				}
 				default:

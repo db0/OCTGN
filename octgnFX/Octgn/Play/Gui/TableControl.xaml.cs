@@ -20,18 +20,34 @@ using Octgn.Extentions;
 namespace Octgn.Play.Gui
 {
     using System.IO;
+    using System.Text;
 
     using Microsoft.Win32;
 
+    using Octgn.Annotations;
     using Octgn.Controls;
 
-    partial class TableControl
+    partial class TableControl : INotifyPropertyChanged
     {
         private readonly int _defaultHeight;
         private readonly int _defaultWidth;
         protected bool IsCardSizeValid;
         private Size _cardSize;
         private IDragOperation _dragOperation;
+
+        public string ManipulationString
+        {
+            get
+            {
+                return this.manipulationString;
+            }
+            set
+            {
+                if (this.manipulationString == value) return;
+                this.manipulationString = value;
+                this.OnPropertyChanged("ManipulationString");
+            }
+        }
 
         public TableControl()
         {
@@ -48,9 +64,10 @@ namespace Octgn.Play.Gui
                 if (tableDef.Background != null) 
                     SetBackground(tableDef);
             }
-            if (!Program.GameSettings.HideBoard)
-                if (tableDef.Board != null)
-                    SetBoard(tableDef);
+            Program.GameEngine.BoardImage = tableDef.Board;
+            //if (!Program.GameSettings.HideBoard)
+            //    if (tableDef.Board != null)
+            //        SetBoard(tableDef);
 
             if (!Program.GameSettings.UseTwoSidedTable)
                 middleLine.Visibility = Visibility.Collapsed;
@@ -74,19 +91,25 @@ namespace Octgn.Play.Gui
                             };
             Loaded += delegate { CenterView(); };
             Program.GameEngine.PropertyChanged += GameOnPropertyChanged;
-            this.ManipulationDelta += OnManipulationDelta;
+            //this.IsManipulationEnabled = true;
+            //this.ManipulationDelta += OnManipulationDelta;
         }
 
         private void OnManipulationDelta(object sender, ManipulationDeltaEventArgs e)
         {
             e.Handled = true;
             IsCardSizeValid = false;
-
+            var sb = new StringBuilder();
+            sb.AppendLine(Newtonsoft.Json.JsonConvert.SerializeObject(e.DeltaManipulation.Expansion));
+            sb.AppendLine(Newtonsoft.Json.JsonConvert.SerializeObject(e.DeltaManipulation.Expansion.Length));
+            
+            ManipulationString = sb.ToString();
             Point center = e.ManipulationOrigin;
             double oldZoom = Zoom; // May be animated
 
             // Set the new zoom level
-            if (e.DeltaManipulation.Scale.LengthSquared > 0)
+            //Zoom = oldZoom * e.DeltaManipulation.Scale.Length;
+            if (e.DeltaManipulation.Expansion.X > 0)
                 Zoom = oldZoom + 0.125;
             else if (oldZoom > 0.15)
                 Zoom = oldZoom - 0.125;
@@ -98,7 +121,8 @@ namespace Octgn.Play.Gui
             Offset += new Vector(center.X * ratio, center.Y * ratio);
             BeginAnimation(OffsetProperty, null); // Stop any animation, which could override the current Offset
 
-            base.OnManipulationDelta(e);
+            e.Handled = true;
+            //base.OnManipulationDelta(e);
         }
 
         private void GameOnPropertyChanged(object sender, PropertyChangedEventArgs propertyChangedEventArgs)
@@ -190,20 +214,20 @@ namespace Octgn.Play.Gui
             Background = backBrush;
         }
 
-        private void SetBoard(DataNew.Entities.Group tableDef)
-        {
-            Rect pos = new Rect(tableDef.BoardPosition.X,tableDef.BoardPosition.Y,tableDef.BoardPosition.Width,tableDef.BoardPosition.Height);
-            var img = new Image
-                          {
-                              Source = ExtensionMethods.BitmapFromUri(new Uri(tableDef.Board)),
-                              Width = pos.Width,
-                              Height = pos.Height,
-                              HorizontalAlignment = HorizontalAlignment.Left,
-                              VerticalAlignment = VerticalAlignment.Top,
-                              Margin = new Thickness(pos.Left, pos.Top, 0, 0)
-                          };
-            boardContainer.Children.Insert(0, img);        
-        }
+        //private void SetBoard(DataNew.Entities.Group tableDef)
+        //{
+        //    Rect pos = new Rect(tableDef.BoardPosition.X,tableDef.BoardPosition.Y,tableDef.BoardPosition.Width,tableDef.BoardPosition.Height);
+        //    var img = new Image
+        //                  {
+        //                      Source = ExtensionMethods.BitmapFromUri(new Uri(tableDef.Board)),
+        //                      Width = pos.Width,
+        //                      Height = pos.Height,
+        //                      HorizontalAlignment = HorizontalAlignment.Left,
+        //                      VerticalAlignment = VerticalAlignment.Top,
+        //                      Margin = new Thickness(pos.Left, pos.Top, 0, 0)
+        //                  };
+        //    boardContainer.Children.Insert(0, img);        
+        //}
 
         public static bool IsInInvertedZone(double y)
         {
@@ -284,14 +308,14 @@ namespace Octgn.Play.Gui
                     e.FaceUp = e.ClickedCard.FaceUp;
                 if (idx == -1)
                     idx = table.Cards.Count;
-                e.ClickedCard.MoveToTable((int) pt.X, (int) pt.Y, e.FaceUp != null && e.FaceUp.Value, idx);
+                e.ClickedCard.MoveToTable((int) pt.X, (int) pt.Y, e.FaceUp != null && e.FaceUp.Value, idx,false);
 
                 // If there were other cards (i.e. dragging from a count number in GroupWindow), move them accordingly
                 double xOffset = Program.GameEngine.Definition.CardWidth*1.05;
                 foreach (Card c in e.Cards.Where(c => c != e.ClickedCard))
                 {
                     pt.X += xOffset;
-                    c.MoveToTable((int) pt.X, (int) pt.Y, e.FaceUp != null && e.FaceUp.Value, idx);
+                    c.MoveToTable((int) pt.X, (int) pt.Y, e.FaceUp != null && e.FaceUp.Value, idx,false);
                 }
             }
             else
@@ -319,7 +343,7 @@ namespace Octgn.Play.Gui
                             y -= delta;
                         }
                     }
-                    c.MoveToTable(x, y, c.FaceUp, idx);
+                    c.MoveToTable(x, y, c.FaceUp, idx,false);
                 }
             }
         }
@@ -641,6 +665,8 @@ namespace Octgn.Play.Gui
 
         protected Point ContextMenuPosition;
 
+        private string manipulationString;
+
         protected override void OnContextMenuOpening(ContextMenuEventArgs e)
         {
             ContextMenuPosition = MousePosition();
@@ -663,7 +689,7 @@ namespace Octgn.Play.Gui
                                   Header = Program.GameEngine.Definition.Player.Hand.Name,
                                   InputGestureText = Program.GameEngine.Definition.Player.Hand.Shortcut
                               };
-            subItem.Click += delegate { Selection.Do(c => c.MoveTo(Player.LocalPlayer.Hand, true), ContextCard); };
+            subItem.Click += delegate { Selection.Do(c => c.MoveTo(Player.LocalPlayer.Hand, true,false), ContextCard); };
             item.Items.Add(subItem);
             var groupDefs = Program.GameEngine.Definition.Player.Groups.ToArray();
             var moveToBottomItems = new List<MenuItem>();
@@ -672,7 +698,7 @@ namespace Octgn.Play.Gui
                 var groupDef = groupDefs[i];
                 Group indexedGroup = Player.LocalPlayer.IndexedGroups[i + 1]; // 0 is hand
                 subItem = new MenuItem {Header = groupDef.Name, InputGestureText = groupDef.Shortcut};
-                subItem.Click += delegate { Selection.Do(c => c.MoveTo(indexedGroup, true), ContextCard); };
+                subItem.Click += delegate { Selection.Do(c => c.MoveTo(indexedGroup, true,false), ContextCard); };
                 item.Items.Add(subItem);
                 subItem = new MenuItem
                               {
@@ -681,7 +707,7 @@ namespace Octgn.Play.Gui
                                       string.IsNullOrEmpty(groupDef.Shortcut) ? null : "Alt+" + groupDef.Shortcut
                               };
                 subItem.Click +=
-                    delegate { Selection.Do(c => c.MoveTo(indexedGroup, true, indexedGroup.Count), ContextCard); };
+                    delegate { Selection.Do(c => c.MoveTo(indexedGroup, true, indexedGroup.Count,false), ContextCard); };
                 moveToBottomItems.Add(subItem);
             }
             if (moveToBottomItems.Count > 0) item.Items.Add(new Separator());
@@ -821,6 +847,23 @@ namespace Octgn.Play.Gui
         #endregion
 
         #endregion
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        [NotifyPropertyChangedInvocator]
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            var handler = PropertyChanged;
+            if (handler != null)
+            {
+                handler(this, new PropertyChangedEventArgs(propertyName));
+            }
+        }
+
+        private void TableControl_OnManipulationStarting(object sender, ManipulationStartingEventArgs e)
+        {
+            e.ManipulationContainer = this.adDecorator;
+        }
     }
 
     public class TableKeyEventArgs : RoutedEventArgs

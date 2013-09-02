@@ -5,7 +5,7 @@ using System.Timers;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-
+using Octgn.Extentions;
 using Skylabs.Lobby;
 
 namespace Octgn.Controls
@@ -66,6 +66,7 @@ namespace Octgn.Controls
             dragHandler = this.ListViewGameList_OnDragDelta;
             ListViewGameList.AddHandler(Thumb.DragDeltaEvent, dragHandler, true);
             HostedGameList = new ObservableCollection<HostedGameViewModel>();
+	        HideUninstalledGames = Prefs.HideUninstalledGamesInList;
             Program.LobbyClient.OnLoginComplete += LobbyClient_OnLoginComplete;
             Program.LobbyClient.OnDisconnect += LobbyClient_OnDisconnect;
             Program.LobbyClient.OnDataReceived += LobbyClient_OnDataReceived;
@@ -73,26 +74,45 @@ namespace Octgn.Controls
             timer = new Timer(10000);
             timer.Start();
             timer.Elapsed += this.TimerElapsed;
+			UpdateHideButtonText();
         }
+
+		void UpdateHideButtonText()
+		{
+			HideUninstalledGamesButton.Content = HideUninstalledGames ? "Show Uninstalled Games" : "Hide Uninstalled Games";
+		}
 
         void RefreshGameList()
         {
-            Log.Info("Refreshing list...");
-            var list = Program.LobbyClient.GetHostedGames().Select(x => new HostedGameViewModel(x)).ToList();
-            Log.Info("Got hosted games list");
-            Dispatcher.Invoke(new Action(() =>
-                                             {
-                                                 Log.Info("Refreshing visual list");
-                                                 var removeList = HostedGameList.Where(i => list.All(x => x.Port != i.Port)).ToList();
-                                                 removeList.ForEach(x => HostedGameList.Remove(x));
-                                                 var addList = list.Where(i => this.HostedGameList.All(x => x.Port != i.Port)).ToList();
-                                                 HostedGameList.AddRange(addList);
-                                                 foreach (var g in HostedGameList)
-                                                     g.Update();
-                                                 Log.Info("Visual list refreshed");
+            lock (timer)
+            {
+                Log.Info("Refreshing list...");
+                var list = Program.LobbyClient.GetHostedGames().Select(x => new HostedGameViewModel(x)).ToList();
+                Log.Info("Got hosted games list");
 
-                                             }));
+                Dispatcher.Invoke(
+                    new Action(
+                        () =>
+                            {
+                                Log.Info("Refreshing visual list");
+
+                                if (HideUninstalledGames)
+                                {
+                                    list = list.Where(game => game.GameName != "{Unknown Game}").ToList();
+                                }
+
+                                var removeList = HostedGameList.Where(i => list.All(x => x.Port != i.Port)).ToList();
+                                removeList.ForEach(x => HostedGameList.Remove(x));
+                                var addList = list.Where(i => this.HostedGameList.All(x => x.Port != i.Port)).ToList();
+                                HostedGameList.AddRange(addList);
+                                foreach (var g in HostedGameList) g.Update();
+                                Log.Info("Visual list refreshed");
+
+                            }));
+            }
         }
+
+		private bool HideUninstalledGames { get; set; }
 
         private void ShowHostGameDialog()
         {
@@ -190,20 +210,28 @@ namespace Octgn.Controls
         #region LobbyEvents
         void LobbyClient_OnDisconnect(object sender, EventArgs e)
         {
-            Log.Info("Disconnected");
-            isConnected = false;
+            lock (timer)
+            {
+                Log.Info("Disconnected");
+                isConnected = false;
+                Dispatcher.Invoke(new Action(()=>this.HostedGameList.Clear()));
+            }
         }
 
         void LobbyClient_OnLoginComplete(object sender, LoginResults results)
         {
-            Log.Info("Connected");
-            isConnected = true;
+            lock (timer)
+            {
+                Log.Info("Connected");
+                isConnected = true;
+            }
         }
 
         void LobbyClient_OnDataReceived(object sender, DataRecType type, object data)
         {
             if (type == DataRecType.GameList || type == DataRecType.GamesNeedRefresh)
             {
+
                 Log.Info("Games List Received");
                 RefreshGameList();
             }
@@ -284,17 +312,20 @@ namespace Octgn.Controls
 
         void TimerElapsed(object sender, ElapsedEventArgs e)
         {
-            try
+            lock (timer)
             {
-                if (Program.LobbyClient.IsConnected)
+                try
                 {
-                    Log.Info("Refresh game list timer ticks");
-                    Program.LobbyClient.BeginGetGameList();
+                    if (Program.LobbyClient.IsConnected)
+                    {
+                        Log.Info("Refresh game list timer ticks");
+                        Program.LobbyClient.BeginGetGameList();
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.Warn("Get Custom games timer tick error", ex);
+                catch (Exception ex)
+                {
+                    Log.Warn("Get Custom games timer tick error", ex);
+                }
             }
         }
 
@@ -398,5 +429,15 @@ namespace Octgn.Controls
         }
 
         #endregion
+
+	    private void HideUninstalledGamesButton_OnClick(object sender, RoutedEventArgs e)
+	    {
+			// toggle text and value...
+		    HideUninstalledGames = !HideUninstalledGames;
+		    Prefs.HideUninstalledGamesInList = HideUninstalledGames;
+		    UpdateHideButtonText();
+			RefreshGameList();
+	    }
+
     }
 }

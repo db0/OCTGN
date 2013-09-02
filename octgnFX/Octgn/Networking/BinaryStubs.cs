@@ -491,7 +491,7 @@ foreach (int p in id)
 		}
 
 
-		public void MoveCardReq(Card card, Group group, int idx, bool faceUp)
+		public void MoveCardReq(Card card, Group group, int idx, bool faceUp, bool isScriptMove)
 		{
 		    if(Program.Client == null)return;
 			MemoryStream stream = new MemoryStream(512);
@@ -507,6 +507,7 @@ writer.Write(card.Id);
 			writer.Write(group.Id);
 			writer.Write(idx);
 			writer.Write(faceUp);
+			writer.Write(isScriptMove);
 
 			writer.Flush(); writer.Seek(0, SeekOrigin.Begin);
 			writer.Write((int)stream.Length);
@@ -515,7 +516,7 @@ writer.Write(card.Id);
 		}
 
 
-		public void MoveCardAtReq(Card card, int x, int y, int idx, bool faceUp)
+		public void MoveCardAtReq(Card card, int x, int y, int idx, bool isScriptMove, bool faceUp)
 		{
 		    if(Program.Client == null)return;
 			MemoryStream stream = new MemoryStream(512);
@@ -531,6 +532,7 @@ writer.Write(card.Id);
 			writer.Write(x);
 			writer.Write(y);
 			writer.Write(idx);
+			writer.Write(isScriptMove);
 			writer.Write(faceUp);
 
 			writer.Flush(); writer.Seek(0, SeekOrigin.Begin);
@@ -1329,6 +1331,27 @@ writer.Write(isFlipped);
 			writer.Write((byte)93);
 writer.Write(player.Id);
 			writer.Write(name);
+
+			writer.Flush(); writer.Seek(0, SeekOrigin.Begin);
+			writer.Write((int)stream.Length);
+			writer.Close();
+			Send(stream.ToArray());
+		}
+
+
+		public void Ready(Player player)
+		{
+		    if(Program.Client == null)return;
+			MemoryStream stream = new MemoryStream(512);
+			stream.Seek(4, SeekOrigin.Begin);
+			BinaryWriter writer = new BinaryWriter(stream);
+
+      if (Program.Client.Muted != 0)
+          writer.Write(Program.Client.Muted);
+      else
+          writer.Write(0);
+			writer.Write((byte)94);
+writer.Write(player.Id);
 
 			writer.Flush(); writer.Seek(0, SeekOrigin.Begin);
 			writer.Write((int)stream.Length);

@@ -2,11 +2,14 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
     using System.Net;
     using System.Reflection;
     using System.Threading.Tasks;
     using System.Timers;
 
+    using Octgn.Extentions;
     using Octgn.Library.Exceptions;
     using Octgn.Site.Api;
     using Octgn.Site.Api.Models;
@@ -19,7 +22,7 @@
     {
         internal static ILog Log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
-        
+
         #region Singleton
 
         internal static SubscriptionModule SingletonContext { get; set; }
@@ -45,13 +48,17 @@
             BroadcastTimer.Elapsed += BroadcastTimerOnElapsed;
             BroadcastTimer.Start();
             Log.Info("Created");
-            Task.Factory.StartNew(() => CheckTimerOnElapsed(null,null)).ContinueWith(
+            Task.Factory.StartNew(() => CheckTimerOnElapsed(null, null)).ContinueWith(
                 x =>
-                    { if (x.Exception != null) Log.Info("Get Is Subbed Failed", x.Exception); });
+                { if (x.Exception != null) Log.Info("Get Is Subbed Failed", x.Exception); });
             Program.LobbyClient.OnLoginComplete += LobbyClientOnOnLoginComplete;
+            var benefits = File.ReadAllLines("subscriberbenefits.txt");
+            Benefits = benefits.ToList();
         }
 
         #endregion Singleton
+
+        public List<string> Benefits { get; internal set; }
 
         public List<SubType> SubTypes { get; set; }
 
@@ -79,7 +86,14 @@
                 if (Program.LobbyClient.IsConnected)
                 {
                     var client = new ApiClient();
-                    var res = client.IsSubbed(Program.LobbyClient.Me.UserName);
+                    var res = IsSubbedResult.UnknownError;
+
+                    if (!String.IsNullOrWhiteSpace(Program.LobbyClient.Password))
+                    {
+                        res = client.IsSubbed(Program.LobbyClient.Me.UserName, Program.LobbyClient.Password);
+                    }
+                    else
+                        res = client.IsSubbed(Prefs.Username, Prefs.Password.Decrypt());
                     switch (res)
                     {
                         case IsSubbedResult.Ok:
@@ -92,7 +106,21 @@
                 }
                 else
                 {
-                    ret = false;
+                    if (string.IsNullOrWhiteSpace(Prefs.Password.Decrypt())) ret = false;
+                    else
+                    {
+                        var client = new ApiClient();
+                        var res = client.IsSubbed(Prefs.Username, Prefs.Password.Decrypt());
+                        switch (res)
+                        {
+                            case IsSubbedResult.Ok:
+                                ret = true;
+                                break;
+                            default:
+                                ret = false;
+                                break;
+                        }
+                    }
                 }
 
             }

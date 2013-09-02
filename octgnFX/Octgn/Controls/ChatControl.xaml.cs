@@ -1,11 +1,8 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
-// <copyright file="ChatControl.xaml.cs" company="OCTGN">
-//   GNU Stuff
-// </copyright>
-// <summary>
-//   Interaction logic for ChatControl.xaml
-// </summary>
-// --------------------------------------------------------------------------------------------------------------------
+﻿/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+using System.Collections.Specialized;
 
 namespace Octgn.Controls
 {
@@ -14,30 +11,27 @@ namespace Octgn.Controls
     using System.ComponentModel;
     using System.Linq;
     using System.Reflection;
-    using System.Threading;
+    using System.Timers;
     using System.Windows;
     using System.Windows.Controls;
-    using System.Windows.Documents;
     using System.Windows.Input;
-    using System.Windows.Media;
-    using System.Windows.Shapes;
-
     using CodeBits;
 
+    using Octgn.Annotations;
     using Octgn.Controls.ControlTemplates;
     using Octgn.Extentions;
-    using Octgn.Site.Api.Models;
     using Octgn.Utils;
     using Octgn.Windows;
 
     using Skylabs.Lobby;
-
     using log4net;
+
+    using Timer = System.Threading.Timer;
 
     /// <summary>
     /// Interaction logic for ChatControl
     /// </summary>
-    public partial class ChatControl : UserControl,INotifyPropertyChanged,IDisposable
+    public partial class ChatControl : UserControl, INotifyPropertyChanged, IDisposable
     {
         internal static ILog Log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
         #region Privates
@@ -70,17 +64,23 @@ namespace Octgn.Controls
         /// <summary>
         /// Just scrolled to bottom.
         /// </summary>
-        private bool justScrolledToBottom;
+        private bool shouldDisplayMissedMessagesBreak;
 
         private bool isLightTheme;
 
         private bool showChatInputHint = true;
 
+        private ChatRoomState roomState;
+
+        private System.Timers.Timer ScrollDownTimer;
+
         #endregion Privates
 
         public OrderedObservableCollection<ChatUserListItem> UserListItems { get; set; }
 
-        public OrderedObservableCollection<FriendListItem> FriendListItems { get; set; } 
+        public OrderedObservableCollection<FriendListItem> FriendListItems { get; set; }
+
+        public OrderedObservableCollection<DescriptionItem<string>> AutoCompleteCollection { get; set; }
 
         public bool IsAdmin
         {
@@ -136,18 +136,117 @@ namespace Octgn.Controls
             }
         }
 
+        public bool IsOffline
+        {
+            get
+            {
+                return this.isOffline;
+            }
+            set
+            {
+                if (value == this.isOffline) return;
+                this.isOffline = value;
+                OnPropertyChanged("IsOffline");
+            }
+        }
+
+        public bool IsLoadingUsers
+        {
+            get
+            {
+                return this.RoomState == ChatRoomState.GettingUsers || this.RoomState == ChatRoomState.Connecting || this.RoomState == ChatRoomState.Disconnected;
+            }
+        }
+
+        public bool IsLoadingHistory
+        {
+            get
+            {
+                return this.RoomState == ChatRoomState.GettingUsers || this.RoomState == ChatRoomState.Connecting || this.RoomState == ChatRoomState.Disconnected || this.RoomState == ChatRoomState.GettingHistory;
+            }
+        }
+
+        public bool IsChatLoaded
+        {
+            get
+            {
+                return this.RoomState == ChatRoomState.Connected;
+            }
+        }
+
+        public ChatRoomState RoomState
+        {
+            get
+            {
+                return roomState;
+            }
+            set
+            {
+                if (roomState == value) return;
+                roomState = value;
+                OnPropertyChanged("RoomState");
+                OnPropertyChanged("IsLoadingUsers");
+                OnPropertyChanged("IsLoadingHistory");
+                OnPropertyChanged("IsChatLoaded");
+            }
+        }
+
+        public double ChatFontSize
+        {
+            get
+            {
+                var ret = Prefs.ChatFontSize;
+                return ret;
+            }
+        }
+
         public ContextMenu UserContextMenu { get; set; }
 
         public ContextMenu FriendContextMenu { get; set; }
+
+        public bool AutoCompleteVisible
+        {
+            get { return _autoCompleteVisible; }
+            set
+            {
+                if (value == _autoCompleteVisible) return;
+                _autoCompleteVisible = value;
+                OnPropertyChanged("AutoCompleteVisible");
+            }
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ChatControl"/> class.
         /// </summary>
         public ChatControl()
         {
+            this.AutoCompleteCollection = new OrderedObservableCollection<DescriptionItem<string>>();
+            AutoCompleteCollection.CollectionChanged += AutoCompleteCollectionOnCollectionChanged;
             this.UserListItems = new OrderedObservableCollection<ChatUserListItem>();
             this.FriendListItems = new OrderedObservableCollection<FriendListItem>();
+            if (!this.IsInDesignMode())
+            {
+                if (Program.LobbyClient != null && Program.LobbyClient.IsConnected)
+                {
+                    IsOffline = false;
+                }
+                //ScrollDownTimer = new System.Timers.Timer(150);
+                //ScrollDownTimer.Elapsed += ScrollDownTimerOnElapsed;
+                //ScrollDownTimer.Start();
+            }
             this.InitializeComponent();
+            Chat.TextChanged += delegate
+            {
+                if (keepScrolledToBottom)
+                {
+                    //Dispatcher.BeginInvoke(new Action(() =>
+                    //{
+                        this.Chat.InvalidateMeasure();
+                        this.Chat.InvalidateVisual();
+                        this.Chat.ScrollToEnd();
+                    //}));
+                }
+            };
             this.messageCache = new List<string>();
             this.DataContext = UserListItems;
 
@@ -155,12 +254,54 @@ namespace Octgn.Controls
             {
                 return;
             }
-            justScrolledToBottom = true;
+            this.shouldDisplayMissedMessagesBreak = true;
             this.CreateUserContextMenu();
             Program.OnOptionsChanged += ProgramOnOnOptionsChanged;
             Program.LobbyClient.OnDataReceived += LobbyClientOnDataReceived;
+            Program.LobbyClient.OnLoginComplete += LobbyClientOnOnLoginComplete;
+            Program.LobbyClient.OnDisconnect += LobbyClientOnOnDisconnect;
             this.userRefreshTimer = new Timer(this.OnRefreshTimerTick, this, 100, 7000);
             this.Loaded += OnLoaded;
+        }
+
+        private void ScrollDownTimerOnElapsed(object sender, ElapsedEventArgs elapsedEventArgs)
+        {
+            if (keepScrolledToBottom)
+            {
+                this.Chat.InvalidateMeasure();
+                this.Chat.InvalidateVisual();
+                this.Chat.ScrollToEnd();
+            }
+        }
+
+        private void AutoCompleteCollectionOnCollectionChanged(object sender, NotifyCollectionChangedEventArgs args)
+        {
+            AutoCompleteVisible = AutoCompleteCollection.Count != 0;
+        }
+
+        private void LobbyClientOnOnDisconnect(object sender, EventArgs eventArgs)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(new Action(() => this.LobbyClientOnOnDisconnect(sender, eventArgs)));
+                return;
+            }
+            this.IsEnabled = false;
+            IsOffline = true;
+        }
+
+        private void LobbyClientOnOnLoginComplete(object sender, LoginResults results)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(new Action(() => this.LobbyClientOnOnLoginComplete(sender, results)));
+                return;
+            }
+            if (results == LoginResults.Success)
+            {
+                this.IsEnabled = true;
+                IsOffline = false;
+            }
         }
 
         private void LobbyClientOnDataReceived(object sender, DataRecType type, object data)
@@ -248,7 +389,7 @@ namespace Octgn.Controls
             if (cm == null) return;
             var ui = cm.PlacementTarget as UserListItem;
             if (ui == null) return;
-            
+
         }
 
         private void AddFriendOnClick(object sender, RoutedEventArgs routedEventArgs)
@@ -294,6 +435,7 @@ namespace Octgn.Controls
             Dispatcher.Invoke(new Action(() =>
                 {
                     this.IsLightTheme = Prefs.UseLightChat;
+                    OnPropertyChanged("ChatFontSize");
                     this.InvalidateVisual();
                 }));
         }
@@ -301,7 +443,7 @@ namespace Octgn.Controls
         /// <summary>
         /// Gets the room.
         /// </summary>
-        protected ChatRoom Room
+        internal ChatRoom Room
         {
             get
             {
@@ -317,9 +459,19 @@ namespace Octgn.Controls
         /// </param>
         public void SetRoom(ChatRoom theRoom)
         {
+            if (this.room != null)
+            {
+                throw new InvalidOperationException("Cannot set the room more than once.");
+            }
             this.room = theRoom;
             this.room.OnMessageReceived += this.RoomOnMessageReceived;
             this.room.OnUserListChange += RoomOnOnUserListChange;
+            this.room.OnStateChanged += RoomOnOnStateChanged;
+        }
+
+        private void RoomOnOnStateChanged(object sender, ChatRoomState oldState, ChatRoomState newState)
+        {
+            RoomState = newState;
         }
 
         private void RoomOnOnUserListChange(object sender, List<User> users)
@@ -327,12 +479,15 @@ namespace Octgn.Controls
             this.InvokeRoomUserList();
         }
 
+        private bool keepScrolledToBottom = true;
+
         /// <summary>
         /// When a message is received in the room.
         /// </summary>
         /// <param name="sender">
         /// The sender.
         /// </param>
+        /// <param name="id">The message Id</param>
         /// <param name="from">
         /// The from.
         /// </param>
@@ -345,12 +500,13 @@ namespace Octgn.Controls
         /// <param name="messageType">
         /// The message type.
         /// </param>
-        private void RoomOnMessageReceived(object sender, User @from, string message, DateTime receiveTime, LobbyMessageType messageType)
+        private void RoomOnMessageReceived(object sender, string id, User @from, string message, DateTime receiveTime, LobbyMessageType messageType)
         {
             var theFrom = from;
             var theMessage = message;
             var therTime = receiveTime;
             var themType = messageType;
+            var theId = id;
             if (string.IsNullOrWhiteSpace(theFrom.UserName))
             {
                 theFrom.UserName = "SYSTEM";
@@ -362,7 +518,7 @@ namespace Octgn.Controls
                 theMessage = theMessage.Substring(cl + 1, theMessage.Length - cl - 1).Trim();
             }
 
-            if (theMessage.ToLowerInvariant().Contains("@" + Program.LobbyClient.Me.UserName.ToLowerInvariant()))
+            if (theMessage.ToLowerInvariant().Contains(Program.LobbyClient.Me.UserName.ToLowerInvariant()))
             {
                 Sounds.PlayMessageSound();
             }
@@ -372,63 +528,46 @@ namespace Octgn.Controls
                     () =>
                     {
                         // Got mostly from http://stackoverflow.com/questions/13456441/wpf-richtextboxs-conditionally-scroll
-                        var rtbatbottom = false;
+                        keepScrolledToBottom = false;
 
                         var offset = Chat.VerticalOffset + Chat.ViewportHeight;
-                        if (Math.Abs(offset - Chat.ExtentHeight) <= double.Epsilon)
+                        // How far the scroll bar is up from the bottom
+                        if (Math.Abs(offset - Chat.ExtentHeight) <= 15)
                         {
-                            rtbatbottom = true;
-                            justScrolledToBottom = false;
+                            // We should auto scroll 
+                            keepScrolledToBottom = true;
+                            this.shouldDisplayMissedMessagesBreak = false;
                             //Chat.ScrollToEnd();
                         }
                         else
                         {
                             var contentIsLargerThatViewport = Chat.ExtentHeight > Chat.ViewportHeight;
-                            if (Math.Abs(Chat.VerticalOffset - 0) < double.Epsilon && contentIsLargerThatViewport)
+                            // How far the scroll bar is up from the bottom
+                            if (Math.Abs(Chat.VerticalOffset - 0) < 15 && contentIsLargerThatViewport)
                             {
-                                rtbatbottom = true;
-                                justScrolledToBottom = false;
+                                // We should auto scroll
+                                keepScrolledToBottom = true;
+                                this.shouldDisplayMissedMessagesBreak = false;
                                 //Chat.ScrollToEnd();
                             }
                             else
                             {
-                                if (!justScrolledToBottom)
+                                // We shouldn't auto scroll, instead show the missed message thingy
+                                if (!this.shouldDisplayMissedMessagesBreak)
                                 {
                                     var missed = new MissedMessagesBreak();
                                     ChatRowGroup.Rows.Add(missed);
-                                    justScrolledToBottom = true;
+                                    this.shouldDisplayMissedMessagesBreak = true;
                                 }
                             }
                         }
 
-                        //if (Math.Abs(dVer - 0) > double.Epsilon)
-                        //{
-                        //    if (Math.Abs(dVer + dViewport - dExtent) < double.Epsilon)
-                        //    {
-                        //        rtbatbottom = true;
-                        //        justScrolledToBottom = false;
-                        //    }
-                        //    else
-                        //    {
-                        //        if (!justScrolledToBottom)
-                        //        {
-                        //            var missed = new MissedMessagesBreak();
-                        //            ChatRowGroup.Rows.Add(missed);
-                        //            justScrolledToBottom = true;
-                        //        }
-                        //    }
-                        //}
-
-                        var ctr = new ChatTableRow(theFrom, theMessage, therTime, themType);
+                        var ctr = new ChatTableRow(theFrom, theId, theMessage, therTime, themType);
                         //var ctr = new ChatTableRow { User = theFrom, Message = theMessage, MessageDate = therTime, MessageType = themType };
 
                         ctr.OnMouseUsernameEnter += ChatTableRow_MouseEnter;
                         ctr.OnMouseUsernameLeave += ChatTableRow_MouseLeave;
                         ChatRowGroup.Rows.Add(ctr);
-                        if (rtbatbottom)
-                        {
-                            Chat.ScrollToEnd();
-                        }
                         if (ChatRowGroup.Rows.Count > Prefs.MaxChatHistory)
                         {
                             var remlist =
@@ -439,6 +578,14 @@ namespace Octgn.Controls
                             }
                         }
                     }));
+            Dispatcher.BeginInvoke(new Action(
+                () =>
+                {
+                    if (keepScrolledToBottom)
+                    {
+                        Chat.ScrollToEnd();
+                    }
+                }));
         }
 
         private void ChatTableRow_MouseLeave(object sender, MouseEventArgs mouseEventArgs)
@@ -492,8 +639,8 @@ namespace Octgn.Controls
             var roomUserList = rar
                 .Where(x => x.UserName.ToLower().Contains(filterText))
                 .ToArray();
-            Dispatcher.BeginInvoke(new Action(() => 
-                this.ResetUserList(rar, roomUserList, UserListItems, x => new ChatUserListItem(Room, x), x => x.User.IsSubbed,UserContextMenu)));
+            Dispatcher.BeginInvoke(new Action(() =>
+                this.ResetUserList(rar, roomUserList, UserListItems, x => new ChatUserListItem(Room, x), x => x.User.IsSubbed, UserContextMenu)));
         }
 
         private void InvokeFriendList()
@@ -504,19 +651,22 @@ namespace Octgn.Controls
             var fla = Program.LobbyClient.Friends.ToArray();
             var friendList = fla.Where(x => x.UserName.ToLower().Contains(filterText)).ToArray();
 
-            Dispatcher.BeginInvoke(new Action(() => 
-                this.ResetUserList(fla, friendList, FriendListItems, x => new FriendListItem(x),x=>true,FriendContextMenu)));
+            Dispatcher.BeginInvoke(new Action(() =>
+                this.ResetUserList(fla, friendList, FriendListItems, x => new FriendListItem(x), x => true, FriendContextMenu)));
         }
 
 
         private readonly object resestLocker = new object();
 
+        private bool isOffline = true;
+        private bool _autoCompleteVisible;
+
         /// <summary>
         /// Resets the user list visually and internally. Must be called on UI thread.
         /// </summary>
         private void ResetUserList<T>(User[] fullList, User[] filteredList
-            , OrderedObservableCollection<T> userItems ,Func<User,T> create 
-            , Func<T,bool> resetCondition,
+            , OrderedObservableCollection<T> userItems, Func<User, T> create
+            , Func<T, bool> resetCondition,
             ContextMenu conMenu) where T : UserListItem
         {
             lock (resestLocker)
@@ -608,6 +758,31 @@ namespace Octgn.Controls
 
         #region ChatInput
 
+        private int autoCompleteStart = -1;
+
+        private Key autoCompleteTriggerKey;
+
+
+        private void AutoCompleteDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                var args = new KeyEventArgs(Keyboard.PrimaryDevice, Keyboard.PrimaryDevice.ActiveSource, 0, Key.Enter)
+                           {
+                               RoutedEvent
+                                   =
+                                   Keyboard
+                                   .KeyDownEvent
+                           };
+                ChatInputPreviewKeyUp(sender, args);
+
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("AutoCompleteDoubleClick Error", ex);
+            }
+        }
+
         /// <summary>
         /// Happens when a key goes up in the chat text box.
         /// </summary>
@@ -615,14 +790,160 @@ namespace Octgn.Controls
         /// <param name="e">Event Arguments</param>
         private void ChatInputPreviewKeyUp(object sender, KeyEventArgs e)
         {
-            if (this.room == null)
+            try
             {
-                return;
-            }
+                if (this.room == null)
+                {
+                    return;
+                }
 
-            if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
+                if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
+                {
+                    this.shiftDown = false;
+                }
+                // @ key
+                if (e.Key == Key.D2)
+                {
+                    AutoCompleteCollection.Clear();
+                    autoCompleteTriggerKey = e.Key;
+                    foreach (var u in this.UserListItems)
+                    {
+                        AutoCompleteCollection.Add(new DescriptionItem<string>(u.User.UserName));
+                    }
+                    autoCompleteStart = ChatInput.CaretIndex;
+                    e.Handled = true;
+                }
+                // / key
+                else if (e.Key == Key.Oem2 && ChatInput.CaretIndex == 1)
+                {
+                    AutoCompleteCollection.Clear();
+                    autoCompleteTriggerKey = e.Key;
+                    foreach (var c in ChatRoom.SlashCommands)
+                    {
+                        AutoCompleteCollection.Add(new DescriptionItem<string>(c.Key, c.Value));
+                    }
+                    autoCompleteStart = ChatInput.CaretIndex;
+                }
+                else if (e.Key == Key.Escape)
+                {
+                    AutoCompleteCollection.Clear();
+                }
+                else if (e.Key == Key.Space)
+                {
+                    AutoCompleteCollection.Clear();
+                    if (AutoCompleteVisible)
+                    {
+                        if (autoCompleteTriggerKey == Key.D2)
+                        {
+                            ChatInput.Select(autoCompleteStart - 1, 1);
+                            ChatInput.SelectedText = "";
+                            ChatInput.Select(ChatInput.Text.Length, 0);
+                        }
+                    }
+                }
+                else if (e.Key == Key.Enter)
+                {
+                    if (AutoCompleteVisible)
+                    {
+                        if (AutoCompleteListBox.Items.Count == 0) return;
+                        if (AutoCompleteListBox.SelectedIndex == -1) return;
+                        var item = (DescriptionItem<string>)AutoCompleteListBox.SelectedItem;
+                        ChatInput.Select(autoCompleteStart, ChatInput.Text.Length - autoCompleteStart);
+                        ChatInput.SelectedText = item.Item;
+                        ChatInput.Select(ChatInput.Text.Length, 0);
+                        e.Handled = true;
+                        AutoCompleteCollection.Clear();
+                        if (autoCompleteTriggerKey == Key.D2)
+                        {
+                            ChatInput.Select(autoCompleteStart - 1, 1);
+                            ChatInput.SelectedText = "";
+                            ChatInput.Select(ChatInput.Text.Length, 0);
+                        }
+                    }
+                }
+                else if (e.Key == Key.Up)
+                {
+                    if (AutoCompleteVisible)
+                    {
+                        if (AutoCompleteListBox.Items.Count > 0)
+                        {
+                            if (AutoCompleteListBox.SelectedIndex - 1 < 0)
+                            {
+                                AutoCompleteListBox.SelectedIndex = AutoCompleteListBox.Items.Count - 1;
+                            }
+                            else
+                            {
+                                AutoCompleteListBox.SelectedIndex--;
+                            }
+                            e.Handled = true;
+                            AutoCompleteListBox.ScrollIntoView(AutoCompleteListBox.SelectedItem);
+                            return;
+                        }
+                    }
+                }
+                else if (e.Key == Key.Down)
+                {
+                    if (AutoCompleteVisible)
+                    {
+                        if (AutoCompleteListBox.Items.Count > 0)
+                        {
+                            if (AutoCompleteListBox.SelectedIndex + 1 >= AutoCompleteListBox.Items.Count)
+                            {
+                                AutoCompleteListBox.SelectedIndex = 0;
+                            }
+                            else
+                            {
+                                AutoCompleteListBox.SelectedIndex++;
+                            }
+                            e.Handled = true;
+                            AutoCompleteListBox.ScrollIntoView(AutoCompleteListBox.SelectedItem);
+                            return;
+                        }
+                    }
+                }
+                else
+                {
+                    if (AutoCompleteVisible)
+                    {
+                        var oldSpot = ChatInput.CaretIndex;
+                        if ((ChatInput.Text.Length - autoCompleteStart) < 0)
+                        {
+                            AutoCompleteCollection.Clear();
+                            return;
+                        }
+                        ChatInput.Select(autoCompleteStart, ChatInput.Text.Length - autoCompleteStart);
+
+                        var set = ChatInput.SelectedText;
+
+                        ChatInput.Select(oldSpot, 0);
+
+                        AutoCompleteCollection.Clear();
+                        if (autoCompleteTriggerKey == Key.D2)
+                        {
+                            foreach (var i in UserListItems.ToArray())
+                            {
+                                if (i.User.UserName.StartsWith(set))
+                                    AutoCompleteCollection.Add(new DescriptionItem<string>(i.User.UserName));
+                            }
+                        }
+                        else if (autoCompleteTriggerKey == Key.Oem2)
+                        {
+                            foreach (var i in ChatRoom.SlashCommands)
+                            {
+                                if (i.Key.StartsWith(set))
+                                    AutoCompleteCollection.Add(new DescriptionItem<string>(i.Key, i.Value));
+                            }
+                        }
+                        if (AutoCompleteListBox.Items.Count == 0) return;
+                        if (AutoCompleteListBox.SelectedIndex == -1)
+                            AutoCompleteListBox.SelectedIndex = 0;
+                    }
+                }
+
+            }
+            catch (Exception ex)
             {
-                this.shiftDown = false;
+                Log.Warn("ChatInputPreviewKeyUp Error", ex);
             }
         }
 
@@ -643,6 +964,8 @@ namespace Octgn.Controls
                 this.shiftDown = true;
             }
 
+            if (AutoCompleteVisible) return;
+
             if (!this.shiftDown && (e.Key == Key.Return || e.Key == Key.Enter))
             {
                 this.messageCache.Add(ChatInput.Text);
@@ -656,7 +979,7 @@ namespace Octgn.Controls
                 this.curMessageCacheItem = -1;
                 e.Handled = true;
             }
-            else if(String.IsNullOrWhiteSpace(ChatInput.Text))
+            else if (String.IsNullOrWhiteSpace(ChatInput.Text))
             {
                 switch (e.Key)
                 {
@@ -723,8 +1046,11 @@ namespace Octgn.Controls
         {
             Program.OnOptionsChanged -= this.ProgramOnOnOptionsChanged;
             Program.LobbyClient.OnDataReceived -= LobbyClientOnDataReceived;
+            Program.LobbyClient.OnLoginComplete -= LobbyClientOnOnLoginComplete;
+            Program.LobbyClient.OnDisconnect -= LobbyClientOnOnDisconnect;
             this.Loaded -= OnLoaded;
             this.userRefreshTimer.Dispose();
+            this.AutoCompleteCollection.CollectionChanged -= this.AutoCompleteCollectionOnCollectionChanged;
             whisperContextMenuItem.Click -= this.WhisperOnClick;
             addFriendContextMenuItem.Click -= this.AddFriendOnClick;
             banContextMenuItem.Click -= this.BanOnClick;
@@ -732,10 +1058,96 @@ namespace Octgn.Controls
             removeFriendContextMenuItem.Click -= this.RemoveFriendOnClick;
             friendProfileContextMenuItem.Click -= this.ProfileOnClick;
             friendWhisperContextMenuItem.Click -= this.WhisperOnClick;
+            ScrollDownTimer.Stop();
+            ScrollDownTimer.Dispose();
             if (this.room != null)
             {
                 this.room.OnMessageReceived -= this.RoomOnMessageReceived;
                 this.room.OnUserListChange -= RoomOnOnUserListChange;
+                this.room.OnStateChanged -= this.RoomOnOnStateChanged;
+            }
+        }
+    }
+
+    public class DescriptionItem<T> : IComparable<DescriptionItem<T>>, INotifyPropertyChanged where T : IComparable<T>
+    {
+        private T item;
+
+        private string description;
+
+        public T Item
+        {
+            get
+            {
+                return this.item;
+            }
+            set
+            {
+                if (Equals(value, this.item))
+                {
+                    return;
+                }
+                this.item = value;
+                this.OnPropertyChanged("Item");
+            }
+        }
+
+        public string Description
+        {
+            get
+            {
+                return this.description;
+            }
+            set
+            {
+                if (value == this.description)
+                {
+                    return;
+                }
+                this.description = value;
+                this.OnPropertyChanged("Description");
+                this.OnPropertyChanged("HasDescription");
+            }
+        }
+
+        public bool HasDescription
+        {
+            get
+            {
+                return !string.IsNullOrWhiteSpace(Description);
+            }
+        }
+
+        public DescriptionItem()
+        {
+        }
+
+        public DescriptionItem(T item)
+        {
+            Item = item;
+            Description = "";
+        }
+
+        public DescriptionItem(T item, string description)
+        {
+            Item = item;
+            Description = description;
+        }
+
+        public int CompareTo(DescriptionItem<T> other)
+        {
+            return Item.CompareTo(other.Item);
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        [NotifyPropertyChangedInvocator]
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            var handler = PropertyChanged;
+            if (handler != null)
+            {
+                handler(this, new PropertyChangedEventArgs(propertyName));
             }
         }
     }

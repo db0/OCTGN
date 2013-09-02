@@ -51,6 +51,11 @@ namespace Octgn.Play.Gui
             scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, doubleAnimation);
         }
 
+        public override void ExecuteDefaultAction(Card card)
+        {
+            if (!ExecuteDefaultGroupAction()) ExecuteDefaultCardAction(card);
+        }
+
         #region Card DnD
 
         protected override void OnCardOver(object sender, CardsEventArgs e)
@@ -83,7 +88,7 @@ namespace Octgn.Play.Gui
             e.Handled = e.CanDrop = true;
             if (group.TryToManipulate())
                 foreach (Card c in e.Cards)
-                    c.MoveTo(group, e.FaceUp != null && e.FaceUp.Value, 0);
+                    c.MoveTo(group, e.FaceUp != null && e.FaceUp.Value, 0,false);
         }
 
         private void OnCardDroppedBottom(object sender, CardsEventArgs e)
@@ -91,7 +96,7 @@ namespace Octgn.Play.Gui
             e.Handled = e.CanDrop = true;
             if (group.TryToManipulate())
                 foreach (Card c in e.Cards)
-                    c.MoveTo(group, e.FaceUp != null && e.FaceUp.Value, group.Count);
+                    c.MoveTo(group, e.FaceUp != null && e.FaceUp.Value, group.Count,false);
         }
 
         private void OnCardOverBottom(object sender, CardsEventArgs e)

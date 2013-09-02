@@ -212,12 +212,13 @@ namespace Octgn.Server
             }
 
             // Check if the versions are compatible
-#if !DEBUG
-            if ((clientVer.Major != ServerVersion.Major || clientVer.Minor != ServerVersion.Minor))
+#if(!DEBUG)
+            if(clientVer.CompareTo(ServerVersion) < 0)
+            //if ((clientVer.Major != ServerVersion.Major || clientVer.Minor != ServerVersion.Minor))
             {
                 var rpc = new BinarySenderStub(_sender, this);
-                rpc.Error(string.Format("Incompatible versions. This server is accepting {0}.* clients only.",
-                                        ServerVersion.ToString(2)));
+                rpc.Error(string.Format("Your version of OCTGN isn't compatible with this game server. This server is accepting {0} or greater clients only. Your current version is {1}. You should update.",
+                                        ServerVersion, clientVer));
                 try
                 {
                     _sender.Client.Close();
@@ -379,14 +380,14 @@ namespace Octgn.Server
             _broadcaster.CardSwitchTo(uid,c,alternate);
         }
 
-        public void MoveCardReq(int card, int to, int idx, bool faceUp)
+        public void MoveCardReq(int card, int to, int idx, bool faceUp, bool isScriptMove)
         {
-            _broadcaster.MoveCard(_clients[_sender].Id, card, to, idx, faceUp);
+            _broadcaster.MoveCard(_clients[_sender].Id, card, to, idx, faceUp, isScriptMove);
         }
 
-        public void MoveCardAtReq(int card, int x, int y, int idx, bool faceUp)
+        public void MoveCardAtReq(int card, int x, int y, int idx, bool faceUp, bool isScriptMove)
         {
-            _broadcaster.MoveCardAt(_clients[_sender].Id, card, x, y, idx, faceUp);
+            _broadcaster.MoveCardAt(_clients[_sender].Id, card, x, y, idx, faceUp, isScriptMove);
         }
 
         public void AddMarkerReq(int card, Guid id, string name, ushort count)
@@ -503,7 +504,8 @@ namespace Octgn.Server
 
         public void Shuffled(int group, int[] card, short[] pos)
         {
-            _broadcaster.Shuffled(group, card, pos);
+            //_clients[_sender].Rpc.Shuffled(group,card,pos);
+            _broadcaster.Shuffled(group,card,pos);
         }
 
         public void UnaliasGrp(int group)
@@ -624,6 +626,11 @@ namespace Octgn.Server
         public void PlaySound(byte player, string soundName)
         {
             _broadcaster.PlaySound(player,soundName);
+        }
+
+        public void Ready(byte player)
+        {
+            _broadcaster.Ready(player);
         }
     }
 }

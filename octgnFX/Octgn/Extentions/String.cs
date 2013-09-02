@@ -22,8 +22,24 @@ namespace Octgn.Extentions
         {
             // Create a hash of current nickname to use as the Cryptographic Key
             RIPEMD160 hash = RIPEMD160.Create();
-            byte[] hasher = hash.ComputeHash(Encoding.Unicode.GetBytes(Program.LobbyClient.Username));
+            byte[] hasher = hash.ComputeHash(Encoding.Unicode.GetBytes(Prefs.Username));
             return Cryptor.Encrypt(text, BitConverter.ToString(hasher));
         }
+
+		/// <summary>
+		/// Provides a cleaner method of string concatenation. (i.e. "Name {0}".With(firstName)
+		/// </summary>
+		public static string With(this string input, params object[] args)
+		{
+			return string.Format(input, args);
+		}
+
+        public static string Sha1(this string text)
+        {
+            var buffer = Encoding.Default.GetBytes(text);
+            var cryptoTransformSHA1 = new SHA1CryptoServiceProvider();
+            return BitConverter.ToString(cryptoTransformSHA1.ComputeHash(buffer)).Replace("-", "");
+        }
+
     }
 }

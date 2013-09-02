@@ -83,6 +83,12 @@ def isTableBackgroundFlipped():
 def setTableBackgroundFlipped(flipped):
   _api.SetTableBackgroundFlipped(flipped)
 
+def getSetting(name,default):
+  return _api.GetSetting(name,default)
+
+def setSetting(name,value):
+  _api.SaveSetting(name,value)
+
 class Markers(object):
   def __init__(self, card):
     self._cardId = card._id
@@ -246,6 +252,8 @@ class Table(Group):
       return [Card(id) for id in ids]
     else:
       return Card(ids[0]) if len(ids) == 1 else None    
+  def setBoardImage(self, source):
+    _api.SetBoardImage(source)
   _twoSided = None
   @staticmethod
   def isTwoSided():

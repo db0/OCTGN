@@ -1,25 +1,23 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
-// <copyright file="Main.xaml.cs" company="OCTGN">
-//   GNU Stuff
-// </copyright>
-// <summary>
-//   Interaction logic for Main.xaml
-// </summary>
-// --------------------------------------------------------------------------------------------------------------------
+﻿/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 namespace Octgn.Windows
 {
     using System;
     using System.ComponentModel;
+    using System.IO;
     using System.Linq;
     using System.Reflection;
     using System.Threading;
     using System.Threading.Tasks;
     using System.Windows;
     using System.Windows.Input;
+    using System.Windows.Resources;
 
     using Octgn.Core.DataManagers;
     using Octgn.DeckBuilder;
+    using Octgn.Extentions;
 
     using agsXMPP;
 
@@ -53,19 +51,69 @@ namespace Octgn.Windows
             this.Closing += this.OnClosing;
             GameUpdater.Get().Start();
             this.Loaded += OnLoaded;
+            ChatManager.Get().Start(ChatBar);
+            this.Activated += OnActivated;
             //new GameFeedManager().CheckForUpdates();
+        }
+
+        private void OnActivated(object sender, EventArgs eventArgs)
+        {
+            this.StopFlashingWindow();
         }
 
         private void LobbyClientOnOnDisconnect(object sender, EventArgs eventArgs)
         {
-            TopMostMessageBox.Show(
-                "You have been disconnected", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (Program.LobbyClient.DisconnectedBecauseConnectionReplaced)
+            {
+                Program.DoCrazyException(new Exception("Disconnected because connection replaced"), "You have been disconnected because you logged in somewhere else. You'll have to exit and reopen OCTGN to reconnect.");
+                return;
+            }
+            Program.LobbyClient.Stop();
+            Program.LobbyClient.BeginReconnect();
+            //TopMostMessageBox.Show(
+            //    "You have been disconnected", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void OnLoaded(object sender, RoutedEventArgs routedEventArgs)
         {
             this.Loaded -= OnLoaded;
             SubscriptionModule.Get().IsSubbedChanged += Main_IsSubbedChanged;
+            UpdateManager.Instance.Start();
+
+            var uri = new System.Uri("/Resources/CustomDataAgreement.txt", UriKind.Relative);
+            var info = Application.GetResourceStream(uri);
+            var resource = "";
+            using (var s = new StreamReader(info.Stream))
+            {
+                resource = s.ReadToEnd();
+            }
+
+            var hash = resource.Sha1().ToLowerInvariant();
+
+            if (!hash.Equals(Prefs.CustomDataAgreementHash,StringComparison.InvariantCultureIgnoreCase))
+            {
+                Prefs.AcceptedCustomDataAgreement = false;
+            }
+
+            if (!Prefs.AcceptedCustomDataAgreement)
+            {
+                var result = TopMostMessageBox.Show(
+                    resource + Environment.NewLine + Environment.NewLine + "By pressing 'Yes' you agree to the terms above. You must agree to the terms to use OCTGN.",
+                    "OCTGN Custom Data Agreement",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    Prefs.AcceptedCustomDataAgreement = true;
+                    Prefs.CustomDataAgreementHash = hash;
+                    return;
+                }
+                else
+                {
+                    Program.Exit();
+                }
+            }
         }
 
         void Main_IsSubbedChanged(bool obj)
@@ -136,6 +184,11 @@ namespace Octgn.Windows
                 case Key.Escape:
                     ChatBar.HideChat();
                     break;
+#if(DEBUG || Release_Test)
+                case Key.F7:
+                    Program.LobbyClient.Disconnect();
+                    break;
+#endif
             }
         }
 
@@ -176,20 +229,24 @@ namespace Octgn.Windows
                 case LoginResults.Success:
                     this.SetStateOnline();
                     this.Dispatcher.BeginInvoke(new Action(() =>
-                        { 
-                            TabCommunityChat.Focus();
+                        {
+                            if (GameManager.Get().GameCount == 0)
+                                TabCustomGames.Focus();
+                            else
+                                TabCommunityChat.Focus();
 
-                        })).Completed += (o, args) => Task.Factory.StartNew(() => { 
-                                                                                      Thread.Sleep(15000);
-                                                                                      this.Dispatcher.Invoke(new Action(()
-                                                                                                                        =>
-                                                                                          {
-                                                                                              var s =
-                                                                                                  SubscriptionModule.Get
-                                                                                                      ().IsSubscribed;
-                                                                                              if(s != null && s == false)
-                                                                                                this.SubMessage.Visibility = Visibility.Visible;
-                                                                                          }));
+                        })).Completed += (o, args) => Task.Factory.StartNew(() =>
+                        {
+                            Thread.Sleep(15000);
+                            this.Dispatcher.Invoke(new Action(()
+                                                              =>
+                                {
+                                    var s =
+                                        SubscriptionModule.Get
+                                            ().IsSubscribed;
+                                    if (s != null && s == false)
+                                        ShowSubMessage();
+                                }));
                         });
                     break;
                 default:
@@ -211,9 +268,9 @@ namespace Octgn.Windows
                 new Action(
                     () =>
                     {
-                        TabCommunityChat.IsEnabled = false;
+                        //TabCommunityChat.IsEnabled = false;
                         ProfileTab.IsEnabled = false;
-                        TabMain.Focus();
+                        //TabMain.Focus();
                         menuSub.Visibility = Visibility.Collapsed;
                     }));
         }
@@ -231,7 +288,7 @@ namespace Octgn.Windows
                         ProfileTab.IsEnabled = true;
                         ProfileTabContent.Load(Program.LobbyClient.Me);
                         var subbed = SubscriptionModule.Get().IsSubscribed;
-                        if(subbed == null || subbed == false)
+                        if (subbed == null || subbed == false)
                             menuSub.Visibility = Visibility.Visible;
                         else
                             menuSub.Visibility = Visibility.Collapsed;
@@ -307,7 +364,7 @@ namespace Octgn.Windows
 
         private void MenuSubClick(object sender, RoutedEventArgs e)
         {
-            this.ShowSubscribeSite(new SubType(){Description = "",Name = ""});
+            this.ShowSubscribeSite(new SubType() { Description = "", Name = "" });
         }
 
         private void ShowSubscribeSite(SubType subtype)
@@ -323,6 +380,21 @@ namespace Octgn.Windows
         private void MenuHelpClick(object sender, RoutedEventArgs e)
         {
             Program.LaunchUrl(AppConfig.WebsitePath);
+        }
+
+        private void MenuSubBenefitsClick(object sender, RoutedEventArgs e)
+        {
+            ShowSubMessage();
+        }
+
+        public void ShowSubMessage()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(new Action(this.ShowSubMessage));
+                return;
+            }
+            this.SubMessage.Visibility = Visibility.Visible;
         }
     }
 }

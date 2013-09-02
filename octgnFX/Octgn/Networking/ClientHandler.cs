@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-
+using System.Net.Mime;
 using Octgn.Play;
 using Octgn.Play.Actions;
 using Octgn.Utils;
@@ -12,6 +12,8 @@ namespace Octgn.Networking
 {
     using Octgn.Core.DataExtensionMethods;
     using System.Windows.Media;
+
+    using Octgn.Core.Play;
 
     internal sealed class Handler
     {
@@ -76,6 +78,7 @@ namespace Octgn.Networking
             Program.GameEngine.TurnNumber++;
             Program.GameEngine.TurnPlayer = player;
             Program.GameEngine.StopTurn = false;
+            Program.GameEngine.EventProxy.OnTurn(player,Program.GameEngine.TurnNumber);
             Program.Trace.TraceEvent(TraceEventType.Information, EventIds.Turn, "Turn {0}: {1}", Program.GameEngine.TurnNumber, player);
         }
 
@@ -83,6 +86,7 @@ namespace Octgn.Networking
         {
             if (player == Player.LocalPlayer)
                 Program.GameEngine.StopTurn = false;
+            Program.GameEngine.EventProxy.OnEndTurn(player);
             Program.Trace.TraceEvent(TraceEventType.Information, EventIds.Event | EventIds.PlayerFlag(player), "{0} wants to play before end of turn.", player);
         }
 
@@ -149,14 +153,17 @@ namespace Octgn.Networking
         public void NewPlayer(byte id, string nick, ulong pkey)
         {
             Program.Trace.TraceEvent(TraceEventType.Information, EventIds.Event, "{0} has joined the game.", nick);
-            var player = new Player(Program.GameEngine.Definition, nick, id, pkey);
-            // Define the default table side if we are the host
-            if (Program.IsHost)
-                player.InvertedTable = (Player.AllExceptGlobal.Count() & 1) == 0;
-            if (Program.IsHost)
+            System.Windows.Application.Current.Dispatcher.Invoke(new Action(() =>
             {
-                Sounds.PlaySound(Properties.Resources.knockknock, false);
-            }
+                var player = new Player(Program.GameEngine.Definition, nick, id, pkey);
+                // Define the default table side if we are the host
+                if (Program.IsHost)
+                    player.InvertedTable = (Player.AllExceptGlobal.Count() & 1) == 0;
+                if (Program.IsHost)
+                {
+                    Sounds.PlaySound(Properties.Resources.knockknock, false);
+                }
+            }));
         }
 
         /// <summary>Loads a player deck.</summary>
@@ -181,6 +188,7 @@ namespace Octgn.Networking
             }
             Program.Trace.TraceEvent(TraceEventType.Information, EventIds.Event | EventIds.PlayerFlag(who), "{0} loads a deck.", who);
             CreateCard(id, type, group);
+            Program.GameEngine.EventProxy.OnLoadDeck(who,group.Distinct().ToArray());
         }
 
         /// <summary>Creates new Cards as well as the corresponding CardIdentities. The cards may be in different groups.</summary>
@@ -221,15 +229,15 @@ namespace Octgn.Networking
             }
             //var c = new Card(owner,id[0], type[0], Program.Game.Definition.CardDefinition, null, false);
             var c = Card.Find(id[0]);
-            
-            Program.TracePlayerEvent(owner, "{0} creates {1} {2} in {3}'s {4}", owner.Name, id.Length, c == null ? "card" : c.Name, group.Owner.Name,group.Name);
+
+            Program.TracePlayerEvent(owner, "{0} creates {1} {2} in {3}'s {4}", owner.Name, id.Length, c == null ? "card" : c.Name, group.Owner.Name, group.Name);
             // Ignore cards created by oneself
             if (owner == Player.LocalPlayer) return;
             for (int i = 0; i < id.Length; i++)
             {
                 //Card c = new Card(owner, id[i], type[i], Program.Game.Definition.CardDefinition, null, false);
                 //group.AddAt(c, group.Count);
-                var card = new Card(owner,id[i], type[i], null, false);
+                var card = new Card(owner, id[i], type[i], null, false);
                 group.AddAt(card, group.Count);
             }
         }
@@ -278,7 +286,7 @@ namespace Octgn.Networking
             else
             {
                 for (int i = 0; i < id.Length; i++)
-                    new CreateCard(owner, id[i], key[i], faceUp,Program.GameEngine.Definition.GetCardById(modelId[i]), x[i], y[i], !persist).Do();
+                    new CreateCard(owner, id[i], key[i], faceUp, Program.GameEngine.Definition.GetCardById(modelId[i]), x[i], y[i], !persist).Do();
             }
 
             // Display log messages
@@ -309,7 +317,7 @@ namespace Octgn.Networking
             for (int i = 0; i < id.Length; i++)
             {
                 if (type[i] == ulong.MaxValue) continue;
-                CardIdentity ci = new CardIdentity(id[i]) {Alias = true, Key = type[i]};
+                CardIdentity ci = new CardIdentity(id[i]) { Alias = true, Key = type[i] };
             }
         }
 
@@ -323,11 +331,11 @@ namespace Octgn.Networking
             }
         }
 
-        public void MoveCard(Player player, Card card, Group to, int idx, bool faceUp)
+        public void MoveCard(Player player, Card card, Group to, int idx, bool faceUp, bool isScriptMove)
         {
             // Ignore cards moved by the local player (already done, for responsiveness)
             if (player != Player.LocalPlayer)
-                new MoveCard(player, card, to, idx, faceUp).Do();
+                new MoveCard(player, card, to, idx, faceUp, isScriptMove).Do();
             else
             {
                 // Fix: cards may move quickly locally from one group to another one, before we get a chance
@@ -341,7 +349,7 @@ namespace Octgn.Networking
             }
         }
 
-        public void MoveCardAt(Player player, Card card, int x, int y, int idx, bool faceUp)
+        public void MoveCardAt(Player player, Card card, int x, int y, int idx, bool faceUp, bool isScriptMove)
         {
             // Get the table control
             Table table = Program.GameEngine.Table;
@@ -363,7 +371,7 @@ namespace Octgn.Networking
             //bool onTable = card.Group == table;
             //double oldX = card.X, oldY = card.Y;
             // Do the move
-            new MoveCard(player, card, x, y, idx, faceUp).Do();
+            new MoveCard(player, card, x, y, idx, faceUp, isScriptMove).Do();
         }
 
         public void SetMarker(Player player, Card card, Guid id, string name, ushort count)
@@ -916,18 +924,33 @@ namespace Octgn.Networking
 
         public void PlayerSetGlobalVariable(Player p, string name, string value)
         {
+            string oldValue = null;
             if (p.GlobalVariables.ContainsKey(name))
+            {
+                oldValue = p.GlobalVariables[name];
                 p.GlobalVariables[name] = value;
+            }
             else
+            {
                 p.GlobalVariables.Add(name, value);
+            }
+            Program.GameEngine.EventProxy.OnPlayerGlobalVariableChanged(p,name, oldValue, value);
         }
 
         public void SetGlobalVariable(string name, string value)
         {
+            string oldValue = null;
             if (Program.GameEngine.GlobalVariables.ContainsKey(name))
+            {
+                oldValue = Program.GameEngine.GlobalVariables[name];
                 Program.GameEngine.GlobalVariables[name] = value;
+            }
             else
+            {
                 Program.GameEngine.GlobalVariables.Add(name, value);
+            }
+            Program.GameEngine.EventProxy.OnGlobalVariableChanged(name,oldValue,value);
+
         }
 
         public void IsTableBackgroundFlipped(bool isFlipped)
@@ -937,18 +960,33 @@ namespace Octgn.Networking
 
         public void CardSwitchTo(Player player, Card card, string alternate)
         {
-            if(player.Id != Player.LocalPlayer.Id)
+            if (player.Id != Player.LocalPlayer.Id)
                 card.SwitchTo(player, alternate);
         }
 
         public void Ping()
         {
-            
+
         }
 
         public void PlaySound(Player player, string name)
         {
-            if (player.Id != Player.LocalPlayer.Id) Program.GameEngine.PlaySoundReq(player,name);
+            if (player.Id != Player.LocalPlayer.Id) Program.GameEngine.PlaySoundReq(player, name);
+        }
+
+        public void Ready(Player player)
+        {
+            player.Ready = true;
+            if (player.WaitingOnPlayers == false)
+            {
+                Program.GameEngine.EventProxy.OnTableLoad();
+                Program.GameEngine.EventProxy.OnGameStart();
+            }
+        }
+
+        public void PlayerState(Player player, byte b)
+        {
+            player.State = (PlayerState)b;
         }
     }
 }

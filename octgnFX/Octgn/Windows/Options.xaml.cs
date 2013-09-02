@@ -17,15 +17,19 @@
             TextBoxDataDirectory.Text = Prefs.DataDirectory;
             TextBoxWindowSkin.Text = Prefs.WindowSkin;
             CheckBoxTileWindowSkin.IsChecked = Prefs.TileWindowSkin;
-            CheckBoxInstallOnBoot.IsChecked = Prefs.InstallOnBoot;
             CheckBoxLightChat.IsChecked = Prefs.UseLightChat;
             CheckBoxUseHardwareRendering.IsChecked = Prefs.UseHardwareRendering;
             CheckBoxUseWindowTransparency.IsChecked = Prefs.UseWindowTransparency;
+            CheckBoxIgnoreSSLCertificates.IsChecked = Prefs.IgnoreSSLCertificates;
             CheckBoxEnableChatImages.IsChecked = Prefs.EnableChatImages;
             //CheckBoxEnableChatGifs.IsChecked = Prefs.EnableChatGifs;
             CheckBoxEnableWhisperSound.IsChecked = Prefs.EnableWhisperSound;
             CheckBoxEnableNameSound.IsChecked = Prefs.EnableNameSound;
+            CheckBoxUseWindowsForChat.IsChecked = Prefs.UseWindowsForChat;
             MaxChatHistory.Value = Prefs.MaxChatHistory;
+            ChatFontSize.Value = Prefs.ChatFontSize;
+            CheckBoxUseInstantSearch.IsChecked = Prefs.InstantSearch;
+            CheckBoxEnableGameSounds.IsChecked = Prefs.EnableGameSound;
             this.MinMaxButtonVisibility = Visibility.Collapsed;
             this.MinimizeButtonVisibility = Visibility.Collapsed;
             this.CanResize = false;
@@ -48,11 +52,12 @@
                 }));
         }
 
-        void ValidateFields(ref string dataDirectory, bool installOnBoot, 
-            bool useLightChat, bool useHardwareRendering, 
-            bool useTransparentWindows, int maxChatHistory,
+        void ValidateFields(ref string dataDirectory,
+            bool useLightChat, bool useHardwareRendering,
+            bool useTransparentWindows, bool ignoreSSLCertificates, int maxChatHistory,
             bool enableChatImages, bool enableWhisperSound,
-            bool enableNameSound, string windowSkin, bool tileWindowSkin)
+            bool enableNameSound, string windowSkin, 
+            bool tileWindowSkin, bool useWindowsForChat, int chatFontSize, bool useInstantSearch, bool enableGameSounds)
         {
             try
             {
@@ -87,29 +92,37 @@
             var dataDirectory = TextBoxDataDirectory.Text;
             var windowSkin = TextBoxWindowSkin.Text;
             var tileWindowSkin = CheckBoxTileWindowSkin.IsChecked ?? false;
-            var installOnBoot = CheckBoxInstallOnBoot.IsChecked ?? false;
             var useLightChat = CheckBoxLightChat.IsChecked ?? false;
             var useHardwareRendering = CheckBoxUseHardwareRendering.IsChecked ?? false;
             var useTransparentWindows = CheckBoxUseWindowTransparency.IsChecked ?? false;
+            var ignoreSSLCertificates = CheckBoxIgnoreSSLCertificates.IsChecked ?? false;
             var maxChatHistory = MaxChatHistory.Value ?? 100;
             var enableChatImages = CheckBoxEnableChatImages.IsChecked ?? false;
             //var enableChatGifs = CheckBoxEnableChatGifs.IsChecked ?? false;
             var enableWhisperSound = CheckBoxEnableWhisperSound.IsChecked ?? false;
             var enableNameSound = CheckBoxEnableNameSound.IsChecked ?? false;
+            var useWindowsForChat = CheckBoxUseWindowsForChat.IsChecked ?? false;
+            var chatFontSize = ChatFontSize.Value ?? 12;
+            var useInstantSearch = CheckBoxUseInstantSearch.IsChecked ?? false;
+            var enableGameSounds = CheckBoxEnableGameSounds.IsChecked ?? false;
             var task = new Task(
                 () => 
                     this.SaveSettingsTask(
                     ref dataDirectory, 
-                    installOnBoot, 
                     useLightChat, 
                     useHardwareRendering, 
                     useTransparentWindows,
+                    ignoreSSLCertificates,
                     maxChatHistory,
                     enableChatImages,
                     enableWhisperSound,
                     enableNameSound,
                     windowSkin,
-                    tileWindowSkin));
+                    tileWindowSkin,
+                    useWindowsForChat,
+                    chatFontSize,
+                    useInstantSearch,
+                    enableGameSounds));
             task.ContinueWith((t) =>
                                   {
                                       Dispatcher
@@ -121,41 +134,53 @@
 
         void SaveSettingsTask(
             ref string dataDirectory, 
-            bool installOnBoot, 
             bool useLightChat,
             bool useHardwareRendering, 
             bool useTransparentWindows,
+            bool ignoreSSLCertificates,
             int maxChatHistory,
             bool enableChatImages,
             bool enableWhisperSound,
             bool enableNameSound,
             string windowSkin,
-            bool tileWindowSkin)
+            bool tileWindowSkin,
+            bool useWindowsForChat,
+            int chatFontSize,
+            bool useInstantSearch,
+            bool enableGameSounds)
         {
             this.ValidateFields(
                 ref dataDirectory, 
-                installOnBoot, 
                 useLightChat, 
                 useHardwareRendering, 
                 useTransparentWindows,
+                ignoreSSLCertificates,
                 maxChatHistory,
                 enableChatImages,
                 enableWhisperSound,
                 enableNameSound,
                 windowSkin,
-                tileWindowSkin);
+                tileWindowSkin,
+                useWindowsForChat,
+                chatFontSize,
+                useInstantSearch,
+                enableGameSounds);
 
             Prefs.DataDirectory = dataDirectory;
-            Prefs.InstallOnBoot = installOnBoot;
             Prefs.UseLightChat = useLightChat;
             Prefs.UseHardwareRendering = useHardwareRendering;
             Prefs.UseWindowTransparency = useTransparentWindows;
+            Prefs.IgnoreSSLCertificates = ignoreSSLCertificates;
             Prefs.MaxChatHistory = maxChatHistory;
             Prefs.EnableChatImages = enableChatImages;
             Prefs.EnableWhisperSound = enableWhisperSound;
             Prefs.EnableNameSound = enableNameSound;
             Prefs.WindowSkin = windowSkin;
             Prefs.TileWindowSkin = tileWindowSkin;
+            Prefs.UseWindowsForChat = useWindowsForChat;
+            Prefs.ChatFontSize = chatFontSize;
+            Prefs.InstantSearch = useInstantSearch;
+            Prefs.EnableGameSound = enableGameSounds;
             //Prefs.EnableChatGifs = enableChatGifs;
         }
 
